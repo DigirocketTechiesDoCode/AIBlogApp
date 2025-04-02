@@ -72,21 +72,7 @@ LOGIN_TEMPLATE = '''
 </html>
 '''
 
-import os
-import requests
-import time
-
 def split_text_into_chunks(text, max_words=500):
-    """
-    Split text into chunks of approximately max_words.
-    
-    Args:
-        text (str): Input text to be split
-        max_words (int): Maximum number of words per chunk
-    
-    Returns:
-        list: List of text chunks
-    """
     words = text.split()
     chunks = []
     current_chunk = []
@@ -101,59 +87,39 @@ def split_text_into_chunks(text, max_words=500):
             current_chunk = []
             current_word_count = 0
 
-    # Add any remaining words
     if current_chunk:
         chunks.append(' '.join(current_chunk))
 
     return chunks
 
 def humanize_chunk(chunk, api_key=os.getenv("HIX_API_KEY")):
-    """
-    Humanize a single text chunk.
-    
-    Args:
-        chunk (str): Text chunk to humanize
-        api_key (str): HIX API key
-    
-    Returns:
-        str: Humanized chunk or original chunk if humanization fails
-    """
-    # API endpoints
     SUBMIT_URL = "https://bypass.hix.ai/api/hixbypass/v1/submit"
     OBTAIN_URL = "https://bypass.hix.ai/api/hixbypass/v1/obtain"
 
-    # Headers for API requests
     headers = {
         "api-key": api_key,
         "Content-Type": "application/json"
     }
 
-    # Payload for submission
     submit_payload = {
         "input": chunk,
         "mode": "Balanced"
     }
 
     try:
-        # Submit humanization task
         submit_response = requests.post(SUBMIT_URL, json=submit_payload, headers=headers)
         submit_response.raise_for_status()
         submit_data = submit_response.json()
 
-        # Check for submission errors
         if submit_data.get('err_code') != 0:
             print(f"Submission Error: {submit_data.get('err_msg', 'Unknown error')}")
             return chunk
 
-        # Extract task ID
         task_id = submit_data['data']['task_id']
 
-        # Poll for task result
         max_attempts = 10
         for _ in range(max_attempts):
             time.sleep(2)
-
-            # Obtain task result
             obtain_response = requests.get(
                 OBTAIN_URL, 
                 params={"task_id": task_id}, 
@@ -162,11 +128,9 @@ def humanize_chunk(chunk, api_key=os.getenv("HIX_API_KEY")):
             obtain_response.raise_for_status()
             obtain_data = obtain_response.json()
 
-            # Check if task is complete
             if obtain_data.get('err_code') == 0 and obtain_data['data'].get('task_status'):
                 return obtain_data['data'].get('output', chunk)
 
-        # Timeout error
         print("Humanization task timed out")
         return chunk
 
@@ -175,50 +139,23 @@ def humanize_chunk(chunk, api_key=os.getenv("HIX_API_KEY")):
         return chunk
 
 def humanize_text(text, max_words=500):
-    """
-    Humanize text by processing it in chunks.
-    
-    Args:
-        text (str): Text to be humanized
-        max_words (int): Maximum words per chunk
-    
-    Returns:
-        str: Humanized text
-    """
-    # Validate input
     if not text or len(text.split()) < 50:
         return text
 
-    # Get API key from environment
     api_key = os.getenv("HIX_API_KEY")
     if not api_key:
         print("Error: HIX API Key not set in environment variables")
         return text
 
-    # Split text into chunks
     chunks = split_text_into_chunks(text, max_words)
-
-    # Humanize each chunk
     humanized_chunks = []
     for chunk in chunks:
         humanized_chunk = humanize_chunk(chunk, api_key)
         humanized_chunks.append(humanized_chunk)
 
-    # Reassemble humanized chunks
     return ' '.join(humanized_chunks)
-    
+
 def improve_grammar_and_readability(content, primary_keywords, secondary_keywords):
-    """
-    Improve the grammar, clarity, and readability of the generated blog content.
-
-    Args:
-        content (str): The original generated blog content
-        primary_keywords (str): Comma-separated primary keywords
-        secondary_keywords (str): Comma-separated secondary keywords
-
-    Returns:
-        str: Improved, more polished blog content
-    """
     improvement_prompt = f"""Please review and improve the following text.
     Focus on:
     - Make sure the primary keywords are used only 4-5 times in whole blog: {primary_keywords}
@@ -242,7 +179,7 @@ def improve_grammar_and_readability(content, primary_keywords, secondary_keyword
         return improved_content
     except Exception as e:
         print(f"Grammar improvement error: {e}")
-        return content  # Return original content if improvement fails
+        return content
 
 def generate_blog_outline(product_url, product_title, product_description,
                           primary_keywords, secondary_keywords, intent):
@@ -310,8 +247,8 @@ def generate_blog_content(outline, product_url, product_title, product_descripti
     blog_content = []
     all_keywords = primary_keywords.split(", ") + secondary_keywords.split(", ")
     keyword_usage = {keyword: 0 for keyword in all_keywords}
-    primary_keyword_target = 3  # Reduced from 5 to 3 times
-    secondary_keyword_target = 1  # Target usage for secondary keywords
+    primary_keyword_target = 3
+    secondary_keyword_target = 1
 
     for i, section in enumerate(sections):
         previous_text = ' '.join(blog_content) if i > 0 else 'None'
@@ -354,23 +291,19 @@ Generate the content for this section."""
         response = blog_generation_model.generate_content(section_prompt)
         section_content = response.text
 
-        # Update keyword usage count
         for keyword in all_keywords:
             keyword_usage[keyword] += section_content.lower().count(keyword.lower())
 
         blog_content.append(section_content)
 
-    # Ensure primary keywords are used no more than 3 times and secondary keywords are used once
     for keyword, count in keyword_usage.items():
         if keyword in primary_keywords.split(", ") and count > primary_keyword_target:
-            # Remove excess mentions by regenerating content or adjusting references
             blog_content = [section.replace(keyword, f"**{keyword}**", count - primary_keyword_target) for section in blog_content]
         elif keyword in secondary_keywords.split(", ") and count < secondary_keyword_target:
             additional_content = f"Moreover, {keyword} is an important aspect to consider."
             blog_content.append(additional_content)
             keyword_usage[keyword] += 1
 
-    # Combine content and improve grammar and readability
     final_content = '\n\n'.join(blog_content)
     improved_content = improve_grammar_and_readability(final_content, primary_keywords, secondary_keywords)
     return improved_content
@@ -434,8 +367,8 @@ def generate_general_blog_content(outline, keywords, primary_keywords, prompt):
     blog_content = []
     all_keywords = primary_keywords.split(", ") + keywords.split(", ")
     keyword_usage = {keyword: 0 for keyword in all_keywords}
-    primary_keyword_target = 3  # Target usage for primary keywords
-    secondary_keyword_target = 1  # Target usage for secondary keywords
+    primary_keyword_target = 3
+    secondary_keyword_target = 1
 
     for i, section in enumerate(sections):
         previous_text = ' '.join(blog_content) if i > 0 else 'None'
@@ -472,42 +405,24 @@ Generate the content for this section."""
         response = blog_generation_model.generate_content(section_prompt)
         section_content = response.text
 
-        # Update keyword usage count
         for keyword in all_keywords:
             keyword_usage[keyword] += section_content.lower().count(keyword.lower())
 
         blog_content.append(section_content)
 
-    # Ensure primary keywords are used no more than 3 times and secondary keywords are used once
     for keyword, count in keyword_usage.items():
         if keyword in primary_keywords.split(", ") and count > primary_keyword_target:
-            # Remove excess mentions by regenerating content or adjusting references
             blog_content = [section.replace(keyword, f"**{keyword}**", count - primary_keyword_target) for section in blog_content]
         elif keyword in keywords.split(", ") and count < secondary_keyword_target:
             additional_content = f"Moreover, {keyword} is an important aspect to consider."
             blog_content.append(additional_content)
             keyword_usage[keyword] += 1
 
-    # Combine content and improve grammar and readability
     final_content = '\n\n'.join(blog_content)
-    
-    # Fix here: use 'keywords' instead of 'secondary_keywords' in this call
     improved_content = improve_grammar_and_readability(final_content, primary_keywords, keywords)
     return improved_content
 
 def generate_blog_summary(blog_content, primary_keywords, secondary_keywords, intent):
-    """
-    Generate a concise summary of the blog content.
-
-    Args:
-        blog_content (str): The full generated blog content
-        primary_keywords (str): Comma-separated primary keywords
-        secondary_keywords (str): Comma-separated secondary keywords
-        intent (str): The intent of the blog (e.g., informational, commercial)
-
-    Returns:
-        str: A summary of the blog content (150-200 words)
-    """
     summary_prompt = f"""Generate a concise and engaging summary (150-200 words) of the following blog content. 
     Focus on:
     - Highlighting the main points and key takeaways
@@ -529,18 +444,8 @@ def generate_blog_summary(blog_content, primary_keywords, secondary_keywords, in
     except Exception as e:
         print(f"Summary generation error: {e}")
         return "Unable to generate summary due to an error."
-    
+
 def generate_faq_content(blog_content, faq_count=5):
-    """
-    Generate FAQs based on the provided blog content.
-    
-    Args:
-        blog_content (str): The full blog content provided by the user
-        faq_count (int): Number of FAQs to generate (default is 5)
-    
-    Returns:
-        str: Generated FAQs in a formatted string
-    """
     faq_prompt = f"""Generate {faq_count} frequently asked questions (FAQs) based on the following blog content. 
     Ensure the FAQs:
     - Are directly relevant to the content provided
@@ -561,8 +466,8 @@ def generate_faq_content(blog_content, faq_count=5):
     except Exception as e:
         print(f"FAQ generation error: {e}")
         return "Unable to generate FAQs due to an error."
-    
-# HTML templates
+
+# Updated INDEX_TEMPLATE with loaders
 INDEX_TEMPLATE = '''
 <!DOCTYPE html>
 <html lang="en">
@@ -570,6 +475,22 @@ INDEX_TEMPLATE = '''
     <meta charset="UTF-8">
     <title>Blog Generator Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script type="module" src="https://cdn.jsdelivr.net/npm/ldrs/dist/auto/grid.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/ldrs/dist/auto/quantum.js"></script>
+    <style>
+        .loader-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+    </style>
     <script>
         function showForm(type) {
             document.getElementById('product-form-container').style.display = 'none';
@@ -583,14 +504,46 @@ INDEX_TEMPLATE = '''
                 document.getElementById('faq-form-container').style.display = 'block';
             }
         }
+
+        function showGridLoader() {
+            document.getElementById('grid-loader').style.display = 'flex';
+        }
+
+        function hideGridLoader() {
+            document.getElementById('grid-loader').style.display = 'none';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const productForm = document.querySelector('#product-form-container form');
+            const generalForm = document.querySelector('#general-form-container form');
+            const faqForm = document.querySelector('#faq-form-container form');
+
+            if (productForm) {
+                productForm.addEventListener('submit', () => {
+                    showGridLoader();
+                });
+            }
+            if (generalForm) {
+                generalForm.addEventListener('submit', () => {
+                    showGridLoader();
+                });
+            }
+            if (faqForm) {
+                faqForm.addEventListener('submit', () => {
+                    showGridLoader();
+                });
+            }
+        });
     </script>
 </head>
 <body class="bg-gradient-to-br from-gray-100 to-gray-200 min-h-screen flex items-center justify-center p-4">
+    <div class="loader-overlay" id="grid-loader">
+        <l-grid size="100" speed="1.5" color="white"></l-grid>
+    </div>
     <div class="container mx-auto max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden relative">
         <div class="bg-gradient-to-r from-blue-500 to-purple-600 p-8 relative">
             <h1 class="text-4xl font-extrabold mb-4 text-center text-white drop-shadow-lg">Blog Generator Dashboard</h1>
             <p class="text-center text-white opacity-80">Create compelling blog content with ease</p>
-            <!-- Logout Button -->
             <a href="/logout" class="absolute top-4 right-4 flex items-center bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition duration-300 ease-in-out transform hover:scale-105">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -630,7 +583,6 @@ INDEX_TEMPLATE = '''
                 </div>
             </div>
 
-            <!-- Existing Product Form Container -->
             <div id="product-form-container" style="display:none;" class="bg-white p-8 rounded-xl shadow-lg border border-gray-100">
                 <h2 class="text-2xl font-bold mb-6 text-center text-blue-600">Generate Product Blog</h2>
                 <form method="POST" action="/" class="space-y-4">
@@ -664,7 +616,6 @@ INDEX_TEMPLATE = '''
                 </form>
             </div>
 
-            <!-- Existing General Form Container -->
             <div id="general-form-container" style="display:none;" class="bg-white p-8 rounded-xl shadow-lg border border-gray-100">
                 <h2 class="text-2xl font-bold mb-6 text-center text-purple-600">Generate General Blog</h2>
                 <form method="POST" action="/general" class="space-y-4">
@@ -686,7 +637,6 @@ INDEX_TEMPLATE = '''
                 </form>
             </div>
 
-            <!-- Existing FAQ Form Container -->
             <div id="faq-form-container" style="display:none;" class="bg-white p-8 rounded-xl shadow-lg border border-gray-100">
                 <h2 class="text-2xl font-bold mb-6 text-center text-teal-600">Generate FAQ Content</h2>
                 <form method="POST" action="/faq" class="space-y-4">
@@ -709,7 +659,7 @@ INDEX_TEMPLATE = '''
 </html>
 '''
 
-# Updated HTML template to include humanization button and editable content
+# Updated RESULT_TEMPLATE with loaders
 RESULT_TEMPLATE = '''
 <!DOCTYPE html>
 <html lang="en">
@@ -717,10 +667,35 @@ RESULT_TEMPLATE = '''
     <meta charset="UTF-8">
     <title>Blog Generation Result</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script type="module" src="https://cdn.jsdelivr.net/npm/ldrs/dist/auto/grid.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/ldrs/dist/auto/quantum.js"></script>
+    <style>
+        .loader-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+    </style>
     <script>
+        function showQuantumLoader() {
+            document.getElementById('quantum-loader').style.display = 'flex';
+        }
+
+        function hideQuantumLoader() {
+            document.getElementById('quantum-loader').style.display = 'none';
+        }
+
         function humanizeBlog() {
             const userConfirmed = confirm("I have read and made necessary changes to the AI blog. I know each humanize will cost credits. I agree to move forward. Proceed?");
             if (userConfirmed) {
+                showQuantumLoader();
                 fetch('/humanize', {
                     method: 'POST',
                     headers: {
@@ -732,10 +707,12 @@ RESULT_TEMPLATE = '''
                 })
                 .then(response => response.json())
                 .then(data => {
+                    hideQuantumLoader();
                     document.getElementById('humanized-content').textContent = data.humanized_content;
                     document.getElementById('humanize-section').style.display = 'block';
                 })
                 .catch(error => {
+                    hideQuantumLoader();
                     console.error('Error:', error);
                     alert('Failed to humanize the blog');
                 });
@@ -764,6 +741,7 @@ RESULT_TEMPLATE = '''
         }
 
         function regenerateContent() {
+            showQuantumLoader();
             fetch('/regenerate', {
                 method: 'POST',
                 headers: {
@@ -772,6 +750,7 @@ RESULT_TEMPLATE = '''
             })
             .then(response => response.json())
             .then(data => {
+                hideQuantumLoader();
                 if (data.error) {
                     alert('Error: ' + data.error);
                 } else {
@@ -788,6 +767,7 @@ RESULT_TEMPLATE = '''
                 }
             })
             .catch(error => {
+                hideQuantumLoader();
                 console.error('Error:', error);
                 alert('Failed to regenerate content');
             });
@@ -795,6 +775,9 @@ RESULT_TEMPLATE = '''
     </script>
 </head>
 <body class="bg-gradient-to-br from-gray-100 to-gray-200 min-h-screen flex items-center justify-center p-4">
+    <div class="loader-overlay" id="quantum-loader">
+        <l-quantum size="100" speed="1.75" color="white"></l-quantum>
+    </div>
     <div class="container mx-auto max-w-6xl bg-white rounded-2xl shadow-2xl overflow-hidden">
         <div class="bg-gradient-to-r from-blue-500 to-purple-600 p-6">
             <h1 class="text-4xl font-extrabold text-center text-white drop-shadow-lg">Generated Blog Content</h1>
@@ -844,6 +827,7 @@ RESULT_TEMPLATE = '''
             </div>
 
             <div class="flex justify-center space-x-4">
+                {% if not faq_content %}
                 <button onclick="humanizeBlog()" class="flex items-center bg-gradient-to-r from-green-500 to-teal-600 text-white px-6 py-3 rounded-lg hover:from-green-600 hover:to-teal-700 transition transform hover:scale-105 shadow-lg">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -851,6 +835,7 @@ RESULT_TEMPLATE = '''
                     </svg>
                     Humanize Blog
                 </button>
+                {% endif %}
                 <button onclick="saveEdits()" class="flex items-center bg-gradient-to-r from-yellow-500 to-orange-600 text-white px-6 py-3 rounded-lg hover:from-yellow-600 hover:to-orange-700 transition transform hover:scale-105 shadow-lg">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
@@ -913,12 +898,11 @@ def logout():
     session.pop('logged_in', None)
     return redirect(url_for('login'))
 
-# Modified index route with login requirement
+# Modified index route
 @app.route('/', methods=['GET', 'POST'])
 @login_required
 def index():
     if request.method == 'POST':
-        # Your existing POST handling code remains the same
         product_url = request.form.get('product_url')
         product_title = request.form.get('product_title')
         product_description = request.form.get('product_description')
@@ -961,14 +945,12 @@ def index():
 
     return render_template_string(INDEX_TEMPLATE)
 
-# Modified general blog route to store form data
 @app.route('/general', methods=['POST'])
 def generate_general_blog():
     keywords = request.form.get('keywords')
     primary_keywords = request.form.get('primary_keywords')
     prompt = request.form.get('prompt')
 
-    # Store form data in session
     session['form_data'] = {
         'keywords': keywords,
         'primary_keywords': primary_keywords,
@@ -979,10 +961,8 @@ def generate_general_blog():
     try:
         blog_outline = generate_general_blog_outline(keywords, primary_keywords, prompt)
         blog_content = generate_general_blog_content(blog_outline, keywords, primary_keywords, prompt)
-
-        # Generate the blog summary
         blog_summary = generate_blog_summary(
-            blog_content, primary_keywords, keywords, intent="informative"  # Default intent for general blogs
+            blog_content, primary_keywords, keywords, intent="informative"
         )
 
         return render_template_string(RESULT_TEMPLATE,
@@ -993,7 +973,6 @@ def generate_general_blog():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# New route for regenerating content
 @app.route('/regenerate', methods=['POST'])
 def regenerate_content():
     try:
@@ -1068,15 +1047,11 @@ def regenerate_content():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Add a new route for humanization
 @app.route('/humanize', methods=['POST'])
 def humanize_blog():
     try:
-        # Get the content from the request
         data = request.get_json()
         content = data.get('content', '')
-
-        # Humanize the content
         humanized_content = humanize_text(content)
 
         return jsonify({
@@ -1087,16 +1062,11 @@ def humanize_blog():
             'error': str(e)
         }), 500
 
-# Add a new route to save edits
 @app.route('/save', methods=['POST'])
 def save_edits():
     try:
-        # Get the edited content from the request
         data = request.get_json()
         edited_content = data.get('content', '')
-
-        # Here you can add logic to save the edited content to a database or file
-        # For this example, we'll just return a success message
 
         return jsonify({
             'message': 'Edits saved successfully'
@@ -1105,13 +1075,12 @@ def save_edits():
         return jsonify({
             'error': str(e)
         }), 500
-    
+
 @app.route('/faq', methods=['POST'])
 def generate_faq():
     blog_content = request.form.get('blog_content')
     faq_count = int(request.form.get('faq_count', 5))
 
-    # Store form data in session
     session['form_data'] = {
         'blog_content': blog_content,
         'faq_count': faq_count,
@@ -1121,9 +1090,9 @@ def generate_faq():
     try:
         faq_content = generate_faq_content(blog_content, faq_count)
         return render_template_string(RESULT_TEMPLATE,
-                                     outline=None,  # No outline for FAQs
+                                     outline=None,
                                      content=blog_content,
-                                     summary=None,  # No summary for FAQs
+                                     summary=None,
                                      faq_content=faq_content)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
