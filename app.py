@@ -536,7 +536,7 @@ INDEX_TEMPLATE = '''
                         <label class="block mb-2 text-gray-700 group-hover:text-teal-600 transition">Number of FAQs (optional)</label>
                         <input type="number" name="faq_count" min="1" max="20" value="5" class="w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-teal-500 transition">
                     </div>
-                    <button type="button" onclick="submitForm('faq-form', 'grid-loader')" class="w-full bg-gradient-to-r from-teal-500 via-cyan-500 to-teal-600 text-white p-3 rounded-lg font-semibold shadow-lg hover:shadow-xl hover:from-teal-600 hover:via-cyan-600 hover:to-teal-700 transition-all duration-300 ease-in-out transform hover:scale-105 hover:animate-pulse">
+                    <button type="button" onclick="submitForm('faq-form', 'grid-loader')" class="w-full bg-gradient-to-r from-teal-500 via-cyan-500 to-teal-600 text-black p-3 rounded-lg font-semibold shadow-lg hover:shadow-xl hover:from-teal-600 hover:via-cyan-600 hover:to-teal-700 transition-all duration-300 ease-in-out transform hover:scale-105 hover:animate-pulse">
                         Generate FAQs
                     </button>
                 </form>
