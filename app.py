@@ -248,112 +248,168 @@ import os
      return improved_content
  
  def generate_general_blog_outline(keywords, primary_keywords, prompt):
-     outline_prompt = f"""Create a comprehensive and detailed blog outline based on the following details:
+    outline_prompt = f"""Create a comprehensive and detailed blog outline based on the following details:
  
- Keywords: {keywords}
- Primary Keywords: {primary_keywords}
- Prompt: {prompt}
+Keywords: {keywords}
+Primary Keywords: {primary_keywords}
+Prompt: {prompt}
  
- Outline Requirements:
- 1. Introduction:
-    - Compelling hook related to the main topic
-    - Brief overview of the topic and its significance
-    - Problem the blog addresses
-    - Include a captivating anecdote or statistic to engage readers
+Outline Requirements:
+1. Introduction:
+   - Compelling hook related to the main topic
+   - Brief overview of the topic and its significance
+   - Problem the blog addresses
+   - Include a captivating anecdote or statistic to engage readers
  
- 2. Main Sections:
-    - Detailed breakdown of the main points
-    - Unique insights or perspectives
-    - Include sub-sections for each major point
+2. Main Sections:
+   - Detailed breakdown of the main points
+   - Unique insights or perspectives
+   - Include sub-sections for each major point
  
- 3. Use Cases and Applications:
-    - Specific scenarios where the topic is relevant
-    - Target audience and their pain points
-    - Real-world examples or potential applications
-    - Include case studies or success stories if available
+3. Use Cases and Applications:
+   - Specific scenarios where the topic is relevant
+   - Target audience and their pain points
+   - Real-world examples or potential applications
+   - Include case studies or success stories if available
  
- 4. Benefits and Advantages:
-    - Comprehensive list of benefits
-    - Quantifiable improvements or advantages
-    - Customer-centric perspective on the topic's value
-    - Include testimonials or reviews to support claims
+4. Benefits and Advantages:
+   - Comprehensive list of benefits
+   - Quantifiable improvements or advantages
+   - Customer-centric perspective on the topic's value
+   - Include testimonials or reviews to support claims
  
- 5. Practical Insights:
-    - Implementation tips
-    - Best practices related to the topic
-    - Potential challenges and solutions
-    - Include step-by-step guides or tutorials
+5. Practical Insights:
+   - Implementation tips
+   - Best practices related to the topic
+   - Potential challenges and solutions
+   - Include step-by-step guides or tutorials
  
- 6. Conclusion:
-    - Recap of key points
-    - Clear call-to-action
-    - Future potential or upcoming trends
-    - Include a final thought or reflection to leave a lasting impression
+6. Conclusion:
+   - Recap of key points
+   - Clear call-to-action
+   - Future potential or upcoming trends
+   - Include a final thought or reflection to leave a lasting impression
  
- Additional Guidance:
- - Ensure the outline is informative and engaging
- - Incorporate keywords naturally and frequently throughout the blog
- - Focus on solving reader problems
- - Maintain a balanced, objective tone
- - Highlight unique aspects of the topic
- - Provide detailed sub-points under each main section to elaborate on the content
- """
-     response = blog_generation_model.generate_content(outline_prompt)
-     return response.text
+Additional Guidance:
+- Ensure the outline is informative and engaging
+- Incorporate keywords naturally and frequently throughout the blog
+- Focus on solving reader problems
+- Maintain a balanced, objective tone
+- Highlight unique aspects of the topic
+- Provide detailed sub-points under each main section to elaborate on the content
+"""
+    response = blog_generation_model.generate_content(outline_prompt)
+    return response.text
  
- def generate_general_blog_content(outline, keywords, primary_keywords, prompt):
-     sections = outline.split('\n\n')
-     blog_content = []
-     all_keywords = primary_keywords.split(", ") + keywords.split(", ")
-     keyword_usage = {keyword: 0 for keyword in all_keywords}
-     primary_keyword_target = 3
-     secondary_keyword_target = 1
+def generate_general_blog_content(outline, keywords, primary_keywords, prompt):
+    sections = outline.split('\n\n')
+    blog_content = []
+   
+    # Parse keywords into lists
+    primary_kw_list = [kw.strip() for kw in primary_keywords.split(",")]
+    secondary_kw_list = [kw.strip() for kw in keywords.split(",")]
+   
+    # Distribution planning for keywords
+    total_sections = len(sections)
+   
+    # Create a plan for keyword distribution across sections
+    keyword_plan = {
+        "primary": {},
+        "secondary": {}
+    }
+   
+    # Plan primary keywords (aim for 3 uses per primary keyword)
+    for kw in primary_kw_list:
+        keyword_plan["primary"][kw] = []
+        # Distribute across introduction, body, and conclusion
+        section_indices = [0]  # Always use in intro
+        if len(sections) > 2:
+            section_indices.append(len(sections) // 2)  # Use in middle section
+        if len(sections) > 1:
+            section_indices.append(len(sections) - 1)  # Use in conclusion
+        keyword_plan["primary"][kw] = section_indices
+   
+    # Plan secondary keywords (aim for at least 1 use per secondary keyword)
+    for i, kw in enumerate(secondary_kw_list):
+        # Distribute evenly across all sections
+        target_section = (i % (total_sections - 2)) + 1  # Skip intro and conclusion
+        keyword_plan["secondary"][kw] = [target_section]
  
-     for i, section in enumerate(sections):
-         previous_text = ' '.join(blog_content) if i > 0 else 'None'
-         primary_keywords_instruction = (
-             "\n- Use primary keywords sparingly and naturally, aiming for no more than 3 total uses across the entire blog: "
-             + ', '.join(primary_keywords.split(", ")) +
-             ". Ensure the usage is contextually relevant and not forced."
-         )
-         secondary_keywords_instruction = (
-             "\n- Use each of the following secondary keywords approximately **1 time** throughout the entire blog: "
-             + ', '.join(keywords.split(", ")) +
-             ". Make the usage natural and contextually relevant."
-         )
-         section_prompt = f"""Generate a detailed section for a blog post while ensuring no repetition.
+    # Generate each section with specific keyword requirements
+    for i, section in enumerate(sections):
+        # Determine which keywords should be used in this section
+        section_primary_kw = [kw for kw, sections in keyword_plan["primary"].items() if i in sections]
+        section_secondary_kw = [kw for kw, sections in keyword_plan["secondary"].items() if i in sections]
+       
+        previous_text = ' '.join(blog_content) if i > 0 else 'None'
  
- Section Outline:
- {section}
+        keyword_instructions = ""
+        if section_primary_kw:
+            keyword_instructions += f"\n- IMPORTANT: Naturally incorporate these primary keywords in this section: {', '.join(section_primary_kw)}"
+        if section_secondary_kw:
+            keyword_instructions += f"\n- IMPORTANT: Naturally incorporate these secondary keywords in this section: {', '.join(section_secondary_kw)}"
+       
+        if not section_primary_kw and not section_secondary_kw:
+            keyword_instructions = "\n- Focus on content quality without specific keyword requirements for this section."
  
- Guidelines:
- - Word count for this section: Approximately {1200 // len(sections)} words
- - Avoid repeating points from previous sections
- - Focus on new insights, examples, and fresh perspectives
- - Ensure smooth transitions from previous sections
- - Maintain a professional and engaging tone{primary_keywords_instruction}{secondary_keywords_instruction}
+        section_prompt = f"""Generate a detailed section for a blog post that naturally incorporates the required keywords.
  
- Previous Sections Summary:
- {previous_text}
+Section Outline:
+{section}
  
- Generate the content for this section."""
-         response = blog_generation_model.generate_content(section_prompt)
-         section_content = response.text
-         for keyword in all_keywords:
-             keyword_usage[keyword] += section_content.lower().count(keyword.lower())
-         blog_content.append(section_content)
+Topic Overview:
+{prompt}
  
-     for keyword, count in keyword_usage.items():
-         if keyword in primary_keywords.split(", ") and count > primary_keyword_target:
-             blog_content = [section.replace(keyword, f"**{keyword}**", count - primary_keyword_target) for section in blog_content]
-         elif keyword in keywords.split(", ") and count < secondary_keyword_target:
-             additional_content = f"Moreover, {keyword} is an important aspect to consider."
-             blog_content.append(additional_content)
-             keyword_usage[keyword] += 1
+Guidelines:
+- Word count for this section: Approximately {1200 // len(sections)} words
+- Avoid repeating points from previous sections
+- Focus on new insights, examples, and fresh perspectives
+- Ensure smooth transitions from previous sections
+- Maintain a professional and engaging tone{keyword_instructions}
+- DO NOT mention "keywords" or the process of keyword incorporation in the final text
  
-     final_content = '\n\n'.join(blog_content)
-     improved_content = improve_grammar_and_readability(final_content, primary_keywords, keywords)
-     return improved_content
+Previous Sections Summary:
+{previous_text}
+ 
+Generate the content for this section."""
+ 
+        response = blog_generation_model.generate_content(section_prompt)
+        section_content = response.text
+        blog_content.append(section_content)
+ 
+    # Combine content
+    final_content = '\n\n'.join(blog_content)
+   
+    # Verify keyword usage and add missing keywords if necessary
+    keyword_verification_prompt = f"""Review and optimize the following blog content to ensure natural inclusion of all required keywords:
+ 
+Blog Content:
+{final_content}
+ 
+Primary Keywords (each should appear 2-3 times throughout the blog):
+{primary_keywords}
+ 
+Secondary Keywords (each should appear at least once throughout the blog):
+{keywords}
+ 
+Instructions:
+1. Check if all keywords are naturally included in the content
+2. For any missing keywords, revise relevant paragraphs to incorporate them naturally
+3. DO NOT add awkward sentences just to include keywords
+4. Maintain the flow, tone and quality of the content
+5. DO NOT mention "keywords" or the process of incorporating them in the final text
+6. Return the complete, revised blog content
+ 
+Return the optimized blog content:"""
+ 
+    optimized_response = blog_generation_model.generate_content(keyword_verification_prompt)
+    optimized_content = optimized_response.text
+   
+    # Apply any additional readability improvements
+    if 'improve_grammar_and_readability' in globals():
+        optimized_content = improve_grammar_and_readability(optimized_content, primary_keywords, keywords)
+   
+    return optimized_content
  
  def generate_blog_summary(blog_content, primary_keywords, secondary_keywords, intent):
      summary_prompt = f"""Generate a concise and engaging summary (150-200 words) of the following blog content. 
