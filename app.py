@@ -60,7 +60,7 @@ def humanize_chunk(chunk, api_key=None):
 
     submit_payload = {
         "input": chunk,
-        "mode": "Balanced"
+        "mode": "Fast"
     }
 
     try:
